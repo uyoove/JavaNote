@@ -198,7 +198,7 @@ public class User {
 
 **集合参数**
 
-要加注解@requestParam
+要加注解@RequestParam
 
 ![image-20250917123523485](img/image-20250917123523485.png)
 
@@ -360,4 +360,4 @@ public class EmpController {
 
 ![image-20250917224910289](img/image-20250917224910289.png)
 
-![image-20250917225022455](img/image-20250917225022455.png)
+![image-20250917225022455](img/image-20250917225022455.png) 
