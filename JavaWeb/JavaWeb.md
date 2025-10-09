@@ -1,4 +1,6 @@
-# JavaWeb
+#  JavaWeb
+
+[TOC]
 
 ## 1.web入门
 
@@ -361,3 +363,987 @@ public class EmpController {
 ![image-20250917224910289](img/image-20250917224910289.png)
 
 ![image-20250917225022455](img/image-20250917225022455.png) 
+
+## 3.Mybatis
+
+其他请见Mybatis笔记
+
+### 3.1 lombok
+
+需要Maven引入
+
+![image-20250927114924292](img/image-20250927114924292.png)
+
+### 3.2 数据库连接池
+
+![image-20250926221516245](img/image-20250926221516245.png)
+
+![image-20250926222701724](img/image-20250926222701724.png)
+
+### 3.3 入门
+
+![image-20250927110740600](img/image-20250927110740600.png)
+
+![image-20250927115706670](img/image-20250927115706670.png)
+
+如果查询乱码可以这样设置:
+
+![image-20250927124628209](img/image-20250927124628209.png)
+
+![image-20250927132650744](img/image-20250927132650744.png)
+
+```properties
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring.datasource.url=jdbc:mysql://localhost:3306/sqldemo2
+spring.datasource.username=root
+spring.datasource.password=123456
+```
+
+日志输出
+
+```properties
+mybatis.configuration.log-impl=org.apache.ibatis.logging.stdout.StdOutImpl
+```
+
+**记关键字 mybatislog就行**
+
+### 3.4 操作
+
+#### 3.4.1 删除
+
+- mapper接口
+
+```java
+@Mapper
+public interface EmpMapper {
+
+    //根据ID删除数据
+    @Delete("delete from emp where id = #{id}")
+    public void delete(Integer id);
+}
+
+```
+
+- 测试代码
+
+```java
+@SpringBootTest
+class SpringbootMybatisCrudApplicationTests {
+    @Autowired
+    private EmpMapper empMapper;
+
+    @Test
+    public void testDelete(){
+        empMapper.delete(17);
+    }
+}
+```
+
+**预编译SQL:**
+
+![image-20250928121005462](img/image-20250928121005462.png)
+
+![image-20250928121942971](img/image-20250928121942971.png)
+
+![image-20250928122001120](img/image-20250928122001120.png)
+
+#### 3.4.2 新增
+
+- mapper接口
+
+  ```java
+   //新增员工
+      @Insert("insert into emp(username, password, name, gender, image, job, entrydate, dept_id, create_time, update_time) " +
+              "values (#{username},#{password},#{name},#{gender},#{image},#{job},#{entrydate},#{dept_id},#{createTime},#{updateTime})")
+      public void insert(Emp emp);
+  ```
+- 测试代码
+	
+	```java
+	@Test
+	    public void testInsert(){
+	        Emp emp = new Emp();
+	        emp.setUsername("gxt");
+	        emp.setPassword("123456");
+	        emp.setDeptId(1);
+	        emp.setName("龚孝天");
+	        emp.setImage("1.jpg");
+	        emp.setGender((short) 1);
+	        emp.setJob((short) 1);
+	        emp.setEntrydate(LocalDate.of(2000,1,2));
+	        emp.setUpdateTime(LocalDateTime.now());
+	        emp.setCreateTime(LocalDateTime.now());
+	        empMapper.insert(emp);
+	    }
+	```
+
+**主键返回:**
+
+![image-20250928144104781](img/image-20250928144104781.png)
+
+在对应的mapper接口上加上这个注释
+
+```java
+@Options(keyProperty = "id",useGeneratedKeys = true) //获取的是id,获取返回的值
+```
+
+#### 3.4.3 更新
+
+- mapper接口
+
+  ```java
+  @Update("update emp set username=#{username},name=#{name},gender=#{gender},image=#{image},job=#{job},entrydate=#{entrydate}," +
+              "dept_id=#{deptId},update_time=#{updateTime} where id = #{id}")
+      public void update(Emp emp);
+  ```
+
+- 测试代码
+
+  ```java
+  @Test
+      public void testUpdate(){
+          Emp emp = new Emp();
+          emp.setId(20);
+          emp.setUsername("gxt4");
+          emp.setName("龚孝天3");
+          emp.setImage("1.jpg");
+          emp.setGender((short) 1);
+          emp.setJob((short) 2);
+          emp.setEntrydate(LocalDate.of(2000,1,2));
+          emp.setUpdateTime(LocalDateTime.now());
+          emp.setCreateTime(LocalDateTime.now());
+          empMapper.update(emp);
+      }
+  ```
+
+#### 3.4.4 查询
+
+**根据ID查询:**
+
+- mapper接口
+
+```java
+@Results({
+            @Result(column = "dept_id",property = "deptId"),
+            @Result(column = "create_time",property = "createTime"),
+            @Result(column = "update_time",property = "updateTime")
+    })
+    @Select("select * from emp where id=#{id}")
+    public Emp getById(int id);
+```
+
+或者设置:
+
+```java
+mybatis.configuration.map-underscore-to-camel-case=true
+```
+
+自动映射了驼峰命名a_fuck -> aFuck
+
+- 测试代码
+
+ ```java
+  @Test
+     public void testGetById(){
+         Emp emp = empMapper.getById(1);
+         System.out.println(emp);
+     }
+ ```
+
+  ![image-20250928204640043](img/image-20250928204640043.png)
+
+![image-20250928205443674](img/image-20250928205443674.png)
+
+**列表条件查询:**
+
+- mapper接口
+
+  ```java
+  @Select("select * from emp where name like '%${name}%' and gender=#{gender} and entrydate between #{begin} and #{end} order by update_time desc") //在''中不能使用#{}要用${}
+      public List<Emp> list(String name, Short gender, LocalDate begin,LocalDate end);
+  ```
+
+- 测试代码
+
+  ```java
+   @Test
+      public void testList(){
+          List<Emp> list = empMapper.list("张", (short) 1, LocalDate.of(2010, 1, 1), LocalDate.of(2020, 1, 1));
+          System.out.println(list);
+      }
+  ```
+
+![image-20250928211108770](img/image-20250928211108770.png)
+
+**解决${}引起的sql办法**
+
+```java
+@Select("select * from emp where name like concat('%',#{name},'%') and gender=#{gender} and entrydate between #{begin} and #{end} order by update_time desc")
+    public List<Emp> list(String name, Short gender, LocalDate begin,LocalDate end);
+```
+
+**用concat()进行字符串拼接**
+
+![image-20250928212011384](img/image-20250928212011384.png)
+
+### 3.5 XML映射文件
+
+![image-20250929083417430](img/image-20250929083417430.png)
+
+- 先在官网找约束文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+```
+
+- 完整mapper.xml
+
+```xml
+  <?xml version="1.0" encoding="UTF-8" ?>
+  <!DOCTYPE mapper
+          PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+          "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+  <mapper namespace="com.gxt.mapper.EmpMapper">
+      <select id="list" resultType="com.gxt.pojo.Emp">
+          select * from emp where name like concat('%',#{name},'%') and gender=#{gender} and entrydate between #{begin} and #{end} order by update_time desc
+      </select>
+  </mapper>
+```
+
+- mapper接口
+
+```java
+public List<Emp> list(String name, Short gender, LocalDate begin,LocalDate end);
+```
+
+****
+
+**IDEA插件:MybatisX**
+
+![image-20250929085618937](img/image-20250929085618937.png)
+
+------
+
+### 3.6 动态SQL
+
+随着用户的输入和外部条件的变化而变化的SQL语句,称为动态SQL
+
+#### 3.6.1 IF
+
+对上述情况进行约束，这样输入就可以选择为空
+
+- xml文件改写
+
+```xml
+<select id="list" resultType="com.gxt.pojo.Emp">
+        select * from emp
+        <where>
+            <if test="name!=null">
+                name like concat('%',#{name},'%')
+            </if>
+            <if test="gender!=null">
+                and gender=#{gender}
+            </if>
+            <if test="begin!=null and end!=null">
+                and entrydate between #{begin} and #{end}
+            </if>
+        </where>
+        order by update_time desc
+    </select>
+```
+
+- 测试代码
+
+```java
+@Test
+    public void testList(){
+        List<Emp> list = empMapper.list("张", null,null, LocalDate.of(2020, 1, 1));
+        System.out.println(list);
+    }
+```
+
+![image-20250929091702267](img/image-20250929091702267.png)
+
+**UPDATE的<set>标签和<where>标签类似,他会将多余,去掉**
+
+#### 3.6.2 foreach
+
+比如说批量删除:
+
+- mapper文件
+
+  ```java
+  public void deleteByIds(List<Integer> ids);
+  ```
+
+- xml文件
+
+  ```xml
+  <delete id="deleteByIds">
+          delete from emp where id in
+          <foreach collection="ids" item="id" separator="," open="(" close=")">
+              #{id}
+          </foreach>
+      </delete>
+  ```
+
+- 测试代码
+
+  ```java
+  @Test
+      public void testDeleteByIds(){
+          List<Integer> list = Arrays.asList(18,19,20);
+          empMapper.deleteByIds(list);
+      }
+  ```
+
+  ![image-20250929104506986](img/image-20250929104506986.png)
+
+#### 3.6.3 sql&&include
+
+用来优化代码,实现代码复用
+
+![image-20250929104743607](img/image-20250929104743607.png)
+
+## 4.案例
+
+### 4.1 准备过程
+
+**需求说明**
+
+![image-20250926223733234](img/image-20250926223733234.png)
+
+![image-20250929144735438](img/image-20250929144735438.png)
+
+![image-20250929154351551](img/image-20250929154351551.png)
+
+![image-20250929154541233](img/image-20250929154541233.png)
+
+![image-20250929154811915](img/image-20250929154811915.png)
+
+### 4.2 查询部门
+
+#### 4.2.1 初始准备
+
+![image-20250929160108794](img/image-20250929160108794.png)
+
+#### 4.2.2 Controller层接收请求
+
+```java
+@Slf4j //日志
+@RestController
+public class DeptController {
+
+    @RequestMapping("/depts")
+    public Result list(){
+        log.info("查询全部部门数据");
+        return Result.success();
+    }
+}
+```
+
+如果遇到日志出现找不到log的错误,需要检查IDEA的配置
+
+<img src="img/image-20250929162229576.png" alt="image-20250929162229576" style="zoom:150%;" />
+
+​		正确输出:
+
+![image-20250929162457395](img/image-20250929162457395.png)
+
+![image-20250929162516424](img/image-20250929162516424.png)
+
+​	**注意上述方法可以通过,post,get,put....多种方式响应成功,而不能实现只有get可以实现**
+
+​	**需要在Controller这样改:**
+
+```java
+@Slf4j //日志
+@RestController
+public class DeptController {
+    @GetMapping("/depts")
+    public Result list(){
+        log.info("查询全部部门数据");
+        return Result.success();
+    }
+}
+```
+
+#### 4.2.3 Controller层响应请求
+
+- DeptServiceImpl方法
+
+  ```java
+  @Service
+  public class DeptServiceImpl implements DeptService {
+  
+      @Autowired
+      private DeptMapper deptMapper;
+  
+      @Override
+      public List<Dept> list() {
+          return deptMapper.list();
+      }
+  }
+  ```
+
+- DeptMapper接口
+
+  ```java
+  @Mapper
+  public interface DeptMapper {
+      /**
+       * 查询全部部门
+       * @return
+       */
+      @Select("select * from dept")
+      List<Dept> list();
+  }
+  
+  ```
+
+- DeptController
+
+  ```java
+  @Slf4j //日志
+  @RestController
+  public class DeptController {
+  
+      @Autowired
+      private DeptService deptService;
+  
+      @GetMapping("/depts")
+      public Result list(){
+          List<Dept> deptList = deptService.list();
+          log.info("查询全部部门数据");
+          return Result.success(deptList);
+      }
+  }
+  ```
+
+- 结果![image-20250929164547709](img/image-20250929164547709.png)
+
+#### 4.2.4 前后端联调
+
+![image-20251002182208791](img/image-20251002182208791.png)
+
+他会交给TomCat服务器解析成8080端口
+
+![image-20251002182139903](img/image-20251002182139903.png)
+
+### 4.3 删除部门
+
+接口信息:
+
+![image-20251002182531476](img/image-20251002182531476.png)
+
+响应数据:
+
+![image-20251002182731678](img/image-20251002182731678.png)
+
+**mapper接口**
+
+```JAVA
+@DeleteMapping("/depts/{id}")
+    public Result delete(@PathVariable Integer id){
+        deptService.delete(id);
+        log.info("根据id删除部门:{}",id);
+        return Result.success();
+    }
+```
+
+**controller层**
+
+```JAVA
+@DeleteMapping("/depts/{id}")
+    public Result delete(@PathVariable Integer id){
+        deptService.delete(id);
+        log.info("根据id删除部门:{}",id);
+        return Result.success();
+    }
+```
+
+其他略
+
+### 4.4 新增部门
+
+**接口信息**
+
+![image-20251002184359305](img/image-20251002184359305.png)
+
+**请求参数**
+
+![image-20251002184436165](img/image-20251002184436165.png)
+
+**响应参数**
+
+![image-20251002184601963](img/image-20251002184601963.png)
+
+![image-20251002185033891](img/image-20251002185033891.png)
+
+Mapper接口:
+
+```JAVA
+    @Options(keyProperty = "id",useGeneratedKeys = true)
+    @Insert("insert into dept(name, create_time, update_time) values(#{name},#{createTime},#{updateTime})")
+    void add(Dept dept);
+```
+
+Service层:
+
+```java
+@Override
+    public void add(Dept dept) {
+        dept.setCreateTime(LocalDateTime.now());
+        dept.setUpdateTime(LocalDateTime.now());
+        deptMapper.add(dept);
+    }
+```
+
+Controller层:
+
+```java
+/**
+     * 新增部门
+     * @return
+     */
+    @PostMapping("/depts")
+    public Result add(@RequestBody Dept dept){
+        deptService.add(dept);
+        log.info("新增部门:{},id:{}",dept.getName(),dept.getId());
+        return Result.success();
+    }
+```
+
+![image-20251002191255543](img/image-20251002191255543.png)
+
+也可以直接抽取到类
+
+### 4.5 修改部门
+
+#### 4.5.1 根据id查询(回显数据)
+
+![image-20251002201710706](img/image-20251002201710706.png)
+
+![image-20251002202023520](img/image-20251002202023520.png)
+
+**mapper接口**
+
+```java
+@Select("select * from dept where id = #{id}")
+    Dept selectById(Integer id);
+```
+
+**Controller层**
+
+```java
+@GetMapping("/depts/{id}")
+    public Result selectById(@PathVariable Integer id){
+        Dept dept = deptService.selectById(id);
+        log.info("查询部门姓名:{}",dept.getName());
+        return Result.success(dept);
+    }
+```
+
+其他略
+
+#### 4.5.2 修改
+
+![image-20251002203239088](img/image-20251002203239088.png)
+
+响应数据
+
+![image-20251002203300913](img/image-20251002203300913.png)
+
+**mappe接口**
+
+```java
+@Update("update dept set name=#{name} where id = #{id}")
+    void update(Dept dept);
+```
+
+**Controller层**
+
+```java
+@PutMapping("/depts")
+    public Result update(@RequestBody Dept dept){
+        deptService.update(dept);
+        log.info("修改成功部门名:{}",dept.getName());
+        return Result.success();
+    }
+```
+
+**Service层**
+
+```java
+@Override
+    public void update(Dept dept) {
+        dept.setUpdateTime(LocalDateTime.now());
+        deptMapper.update(dept);
+    }
+```
+
+### 4.6 员工管理
+
+#### 4.6.1 分页查询
+
+### ![image-20251002215456374](img/image-20251002215456374.png)
+
+![image-20251002215628464](img/image-20251002215628464.png)
+
+![image-20251002215854530](img/image-20251002215854530.png)
+
+Mapper接口:
+
+```JAVA
+/**
+     * 查询总记录数
+     * @return
+     */
+    @Select("select count(*) from emp")
+    public Long count();
+
+    /**
+     * 分页查询列表数据
+     * @param start
+     * @param pageSize
+     * @return
+     */
+    @Select("select * from emp limit #{start},#{pageSize}")
+    public List<Emp> page(Integer start,Integer pageSize);
+```
+
+Service层:
+
+```java
+@Override
+    public PageBean page(Integer page, Integer pageSize) {
+        PageBean pageBean = new PageBean();
+        Integer start = (page - 1) * pageSize;
+        pageBean.setRows(empMapper.page(start,pageSize));
+        pageBean.setTotal(empMapper.count());
+        return pageBean;
+    }
+```
+
+Controller层:
+
+```java
+@GetMapping
+    public Result page(@RequestParam(defaultValue = "1") Integer page,@RequestParam(defaultValue = "10") Integer pageSize){
+        log.info("分页查询,参数:{},{}",page,pageSize);
+        PageBean pageBean = empService.page(page,pageSize);
+        return Result.success(pageBean);
+    }
+```
+
+#### 4.6.2 分页插件PageHelper
+
+![image-20251003152436715](img/image-20251003152436715.png)
+
+**插件依赖:**
+
+![image-20251003152513556](img/image-20251003152513556.png)
+
+#### 4.6.3 条件分页查询
+
+设置动态SQL
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.gxt.mapper.EmpMapper">
+    <select id="list" resultType="com.gxt.pojo.Emp">
+        select *
+        from emp
+        <where>
+            <if test="name!=null and name!=''">
+                name like concat('%',#{name},'%')
+            </if>
+            <if test="gender!=null">
+                and gender = #{gender}
+            </if>
+            <if test="begin!=null and end!=null">
+                and entrydate between #{begin} and #{end}
+            </if>
+        </where>
+        order by update_time desc
+    </select>
+</mapper>
+```
+
+**Controller层**
+
+```JAVA
+@GetMapping
+    public Result page(@RequestParam(defaultValue = "1") Integer page,
+                       @RequestParam(defaultValue = "10") Integer pageSize,
+                       String name, Short gender,
+                       @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate begin,
+                       @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate end){
+        log.info("分页查询,参数:{},{},{},{},{},{}",page,pageSize,name,gender,begin,end);
+        PageBean pageBean = empService.page(page,pageSize,name,gender,begin,end);
+        return Result.success(pageBean);
+    }
+```
+
+#### 4.6.4 批量删除员工
+
+xml文件
+
+```xml
+<delete id="delete">
+        delete from emp
+        where id
+        <foreach collection="ids" item="id" separator="," open="in ( " close=")">
+            #{id}
+        </foreach>
+    </delete>
+```
+
+Controller接口
+
+```java
+@DeleteMapping("/{ids}")
+    public Result delete(@PathVariable List<Integer> ids){
+        log.info("批量删除:{}",ids);
+        empService.delete(ids);
+        return Result.success();
+    }
+```
+
+#### 4.6.5 新增员工
+
+##### 4.6.5.1 添加员工:
+
+**mapper接口:**
+
+```java
+@Insert("insert into emp(username, name, gender, image, job, entrydate, dept_id, create_time, update_time) " +
+            "values (#{username},#{name},#{gender},#{image},#{job},#{entrydate},#{deptId},#{createTime},#{updateTime})")
+    void save(Emp emp);
+```
+
+**service层:**
+
+```java
+@Override
+    public void save(Emp emp) {
+        emp.setCreateTime(LocalDateTime.now());
+        emp.setUpdateTime(LocalDateTime.now());
+        empMapper.save(emp);
+    }
+```
+
+**Controller层:**
+
+```java
+@PostMapping
+    public Result save(@RequestBody Emp emp){
+        log.info("新增员工:{}",emp);
+        empService.save(emp);
+        return Result.success();
+    }
+```
+
+##### 4.6.5.2 上传文件
+
+**简介:**
+
+![image-20251003212250063](img/image-20251003212250063.png)
+
+![image-20251003212615079](img/image-20251003212615079.png)
+
+**保存文件到本地:**
+
+![image-20251004115523943](img/image-20251004115523943.png)
+
+![image-20251004115750275](img/image-20251004115750275.png)
+
+![image-20251004120149499](img/image-20251004120149499.png)
+
+**阿里云OSS:**
+
+![image-20251004120710994](img/image-20251004120710994.png)
+
+![image-20251004120858443](img/image-20251004120858443.png)
+
+![image-20251004173031705](img/image-20251004173031705.png)
+
+#### 4.6.6 修改员工
+
+**页面回显**
+
+![image-20251004174708050](img/image-20251004174708050.png)
+
+略,和部门相同
+
+![image-20251005183828533](img/image-20251005183828533.png)
+
+### 4.7 springboot配置文件
+
+![image-20251005190018187](img/image-20251005190018187.png)
+
+![image-20251005190544694](img/image-20251005190544694.png)
+
+![image-20251005191007274](img/image-20251005191007274.png)
+
+基本上使用 yml配置文件
+
+![image-20251005191105740](img/image-20251005191105740.png)
+
+![image-20251005191235108](img/image-20251005191235108.png)
+
+![image-20251005221526663](img/image-20251005221526663.png)
+
+![image-20251005221552393](img/image-20251005221552393.png)
+
+![image-20251005221602361](img/image-20251005221602361.png)
+
+## 5. 登录功能
+
+### 5.1 登录校验
+
+![image-20251006222301689](img/image-20251006222301689.png)
+
+![image-20251006222648856](img/image-20251006222648856.png)
+
+#### 5.1.1 会话技术
+
+![image-20251006223649845](img/image-20251006223649845.png)
+
+**Cookie:**
+
+![image-20251007162637667](img/image-20251007162637667.png)
+
+**Session:**
+
+![image-20251007163017509](img/image-20251007163017509.png)
+
+![image-20251007163500621](img/image-20251007163500621.png)
+
+**令牌技术:**
+
+![image-20251007163713638](img/image-20251007163713638.png)
+
+#### 5.1.2 JWT令牌
+
+![image-20251008194636103](img/image-20251008194636103.png)
+
+![image-20251008194756317](img/image-20251008194756317.png)
+
+**生成校验:**
+
+引入依赖:
+
+```xml
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-api</artifactId>
+    <version>0.11.5</version>
+</dependency>
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-impl</artifactId>
+    <version>0.11.5</version>
+    <scope>runtime</scope>
+</dependency>
+<dependency>
+    <groupId>io.jsonwebtoken</groupId>
+    <artifactId>jjwt-jackson</artifactId> <!-- or jjwt-gson if Gson is preferred -->
+    <version>0.11.5</version>
+    <scope>runtime</scope>
+</dependency>
+
+```
+
+JWT生成解析:
+
+```java
+//秘钥
+    String key = "gxttttttttttttttttttttttttttttttttttttttttttttttttttt";
+    String Token = "eyJhbGciOiJIUzI1NiJ9.eyJuYW1lIjoiZ3h0IiwiaWQiOjEsImV4cCI6MTc1OTkzMDIzMH0.dLQKlYMK9iCF92OseooCnarEglNVGjtAqsb1P33hVcQ";
+    @Test
+    public void testGenJwt(){ //生成令牌
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("id",1);
+        claims.put("name","gxt");
+
+        String jwt = Jwts.builder()
+                .signWith(SignatureAlgorithm.HS256,key) //数字签名算法,秘钥
+                .setClaims(claims) //自定义数据(载荷)
+                .setExpiration(new Date(System.currentTimeMillis() + 3600 * 1000)) //设置有效期为1小时
+                .compact();//返回字符串类型
+
+        System.out.println(jwt);
+    }
+    @Test
+    public void testParseJwt(){ //解析
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(key)
+                .build()
+                .parseClaimsJws(Token)
+                .getBody();
+        System.out.println(claims);
+    }
+```
+
+![image-20251008203801966](img/image-20251008203801966.png)
+
+**改造之前的登录的代码:**
+
+```java
+@PostMapping("/login")
+public Result login(@RequestBody Emp emp){
+    log.info("员工登录{}",emp);
+    Emp e = empService.login(emp);
+
+    //登录成功,生成令牌,下发令牌
+    if(e!=null){
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("id",emp.getId());
+        claims.put("name",emp.getName());
+        claims.put("username",emp.getUsername());
+
+        String jwt = JwtUtils.generateJwt(claims);
+        return Result.success(jwt);
+    }
+
+    return  Result.error("用户名或密码错误");
+}
+```
+
+#### 5.1.3 过滤器Filter
+
+![image-20251008224755903](img/image-20251008224755903.png)
+
+![image-20251009082849225](img/image-20251009082849225.png)
+
+**重写方法可以只写doFilter,另外两个都有默认实现**
+
+```java
+//放行
+filterChain.doFilter(servletRequest,servletResponse);
+```
+
+**Filter执行流程:**
+
+![image-20251009084911451](img/image-20251009084911451.png)
+
+**Filter拦截路径:**
+
+![image-20251009085118470](img/image-20251009085118470.png)
+
+****
+
+**过滤器链:**
+
+![image-20251009085909284](img/image-20251009085909284.png)
+
+**登录校验:**
+
