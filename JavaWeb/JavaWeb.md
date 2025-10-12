@@ -1118,7 +1118,7 @@ Controller接口
 
 #### 4.6.5 新增员工
 
-##### 4.6.5.1 添加员工:
+##### 4.6.5.1 添加员工
 
 **mapper接口:**
 
@@ -1295,21 +1295,19 @@ JWT生成解析:
 
 ![image-20251008203801966](img/image-20251008203801966.png)
 
-**改造之前的登录的代码:**
+**改造,之前的登录的代码:**
 
 ```java
 @PostMapping("/login")
 public Result login(@RequestBody Emp emp){
-    log.info("员工登录{}",emp);
     Emp e = empService.login(emp);
 
     //登录成功,生成令牌,下发令牌
     if(e!=null){
         Map<String, Object> claims = new HashMap<>();
-        claims.put("id",emp.getId());
-        claims.put("name",emp.getName());
-        claims.put("username",emp.getUsername());
-
+        claims.put("id",e.getId());
+        claims.put("name",e.getName());
+        claims.put("username",e.getUsername());
         String jwt = JwtUtils.generateJwt(claims);
         return Result.success(jwt);
     }
@@ -1347,3 +1345,569 @@ filterChain.doFilter(servletRequest,servletResponse);
 
 **登录校验:**
 
+![image-20251009152239656](img/image-20251009152239656.png)
+
+```java
+import jakarta.servlet.*;
+import jakarta.servlet.annotation.WebFilter;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.util.StringUtils;
+
+import java.io.IOException;
+import java.net.http.HttpRequest;
+
+@Slf4j
+@WebFilter(urlPatterns = "/*")
+public class LoginCheckFilter implements Filter {
+    @Override
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+        //强转
+        HttpServletRequest req = (HttpServletRequest) servletRequest;
+        HttpServletResponse resp = (HttpServletResponse) servletResponse;
+        //1.获取请求url
+        String url = req.getRequestURL().toString();
+        log.info("请求的URL: {}",url);
+
+        //2.判断请求url中是否包含login,如果包含,说明是登录,直接放行
+        if(url.contains("login")){
+            log.info("登录操作,放行...");
+            filterChain.doFilter(servletRequest,servletResponse);
+            return;
+        }
+        //3.获取请求头的令牌 (token)
+        String jwt = req.getHeader("token");
+
+        //4.判断令牌是否存在,如果不存在报错
+        if(!StringUtils.hasLength(jwt)){
+            log.info("请求为空,返回未登录信息");
+            Result error = Result.error("NOT_LOGIN");
+            //手动转换成json
+            String jsonString = JSONObject.toJSONString(error);
+            resp.getWriter().write(jsonString);
+            return;
+        }
+        //5.解析token,如果解析失败,返回error
+        try {
+            JwtUtils.parseJWT(jwt);
+        }catch (Exception e){ //解析失败
+            e.printStackTrace();
+            log.info("解析令牌失败");
+            Result error = Result.error("NOT_LOGIN");
+            //手动转换成json
+            String jsonString = JSONObject.toJSONString(error);
+            resp.getWriter().write(jsonString);
+            return;
+        }
+        //6.令牌合法,放行
+        filterChain.doFilter(servletRequest,servletResponse);
+        log.info("成功");
+
+    }
+}
+
+```
+
+#### 5.1.4 拦截器Interceptor
+
+**概述:**
+
+![image-20251009182716050](img/image-20251009182716050.png)
+
+**快速入门**
+
+- 定义拦截器
+
+  ```java
+  @Component //交给IOC容器管理
+  public class LoginCheckInterceptor implements HandlerInterceptor {
+      @Override //目标资源方法运行前运行,返回true:放行,返回false,不放行
+      public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+          System.out.println("preHandle .....");
+          return true;
+      }
+  
+      @Override //目标资源方法运行后运行
+      public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
+          System.out.println("postHandle .....");
+      }
+  
+      @Override //视图渲染完毕后运行,最后运行
+      public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+          System.out.println("afterCompletion .....");
+      }
+  }
+  ```
+
+- 注册配置
+
+  ```java
+  @Configuration //配置类的注释
+  public class WebConfig implements WebMvcConfigurer {
+  
+      @Autowired
+      private LoginCheckInterceptor loginCheckInterceptor;
+  
+      @Override
+      public void addInterceptors(InterceptorRegistry registry) {
+          registry.addInterceptor(loginCheckInterceptor).addPathPatterns("/**"); //指定加入的拦截器,注册拦截器,后面指定拦截的资源
+      }
+  }
+  ```
+
+  ![image-20251009185841901](img/image-20251009185841901.png)
+
+**拦截路径:**
+
+![image-20251009212443043](img/image-20251009212443043.png)
+
+**执行流程:**
+
+![image-20251009213143918](img/image-20251009213143918.png)
+
+**登录校验**
+
+```java
+@Slf4j
+@Component //交给IOC容器管理
+public class LoginCheckInterceptor implements HandlerInterceptor {
+    @Override //目标资源方法运行前运行,返回true:放行,返回false,不放行
+    public boolean preHandle(HttpServletRequest req, HttpServletResponse resp, Object handler) throws Exception {
+
+        //1.获取请求url
+        String url = req.getRequestURL().toString();
+        log.info("请求的URL: {}",url);
+
+        //2.判断请求url中是否包含login,如果包含,说明是登录,直接放行
+        if(url.contains("login")){
+            log.info("登录操作,放行...");
+            return true;
+        }
+        //3.获取请求头的令牌 (token)
+        String jwt = req.getHeader("token");
+
+        //4.判断令牌是否存在,如果不存在报错
+        if(!StringUtils.hasLength(jwt)){
+            log.info("请求为空,返回未登录信息");
+            Result error = Result.error("NOT_LOGIN");
+            //手动转换成json
+            String jsonString = JSONObject.toJSONString(error);
+            resp.getWriter().write(jsonString);
+            return false;
+        }
+        //5.解析token,如果解析失败,返回error
+        try {
+            JwtUtils.parseJWT(jwt);
+        }catch (Exception e){ //解析失败
+            e.printStackTrace();
+            log.info("解析令牌失败");
+            Result error = Result.error("NOT_LOGIN");
+            //手动转换成json
+            String jsonString = JSONObject.toJSONString(error);
+            resp.getWriter().write(jsonString);
+            return false;
+
+        }
+        log.info(jwt);
+        //6.令牌合法,放行
+        log.info("成功");
+        return true;
+    }
+
+    @Override //目标资源方法运行后运行
+    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
+        System.out.println("postHandle .....");
+    }
+
+    @Override //视图渲染完毕后运行,最后运行
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+        System.out.println("afterCompletion .....");
+    }
+}
+```
+
+## 6.异常处理
+
+![image-20251010182632024](img/image-20251010182632024.png)
+
+![image-20251010183026907](img/image-20251010183026907.png)
+
+**全局异常处理器:**
+
+![image-20251010183228661](img/image-20251010183228661.png)
+
+```java
+/**
+ * 全局异常处理器
+ */
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(Exception.class) //捕获所有异常
+    public Result ex(Exception ex){
+        ex.printStackTrace();
+        return Result.error("对不起,操作失败");
+    }
+}
+```
+
+## 7.事务管理
+
+**概念:**
+
+![image-20251010184653074](img/image-20251010184653074.png)
+
+**spring事务管理:**
+
+![image-20251010191749977](img/image-20251010191749977.png)
+
+![image-20251010191850761](img/image-20251010191850761.png)
+
+![image-20251010192052110](img/image-20251010192052110.png)
+
+```yml
+logging:
+  level:
+    org.springframework.jdbc.support.JdbcTransactionManger: debug
+```
+
+**事务进阶:**
+
+![image-20251010193215979](img/image-20251010193215979.png)
+
+![image-20251010193635970](img/image-20251010193635970.png)
+
+![image-20251010193840034](img/image-20251010193840034.png)
+
+required
+
+requires_new
+
+这两个常用
+
+![image-20251010195000258](img/image-20251010195000258.png)
+
+## 8.AOP
+
+### 8.1 AOP 基础
+
+![image-20251010213929128](img/image-20251010213929128.png)
+
+**快速入门:**
+
+做一个可以统计各个方法执行时间的程序
+
+
+
+- 首先导入依赖
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-aop</artifactId>
+</dependency>
+```
+
+- AOP程序
+
+```java
+@Component
+@Aspect
+@Slf4j
+public class TimeAspect {
+    @Around("execution(* com.gxt.service.*.*(..))") //所以接口所有类，切入点表达式
+    public Object recordTime(ProceedingJoinPoint joinPoint) throws Throwable {
+        //1.记录开始时间
+        long begin = System.currentTimeMillis();
+
+        //2.调用原始方法运行
+        Object result = joinPoint.proceed();
+
+        //3.记录结束时间
+        long end = System.currentTimeMillis();
+
+        //getSignature() 拿到方法签名
+        log.info(joinPoint.getSignature() + "方法执行耗时： {}ms",end - begin);
+
+        return result;
+    }
+}
+```
+
+- 结果
+
+![image-20251010215818003](img/image-20251010215818003.png)
+
+- 场景
+
+![image-20251010215942929](img/image-20251010215942929.png)
+
+<u>AOP就是基于动态代理的，动态代理就是函数套函数，把核心逻辑和其他业务分开，最后套起来（自己的理解）</u>
+
+- **静态代理**就像你为明星A雇了一个专属经纪人A，为明星B雇了一个专属经纪人B。
+- **动态代理**就像一家经纪公司（`InvocationHandler`），它有一个标准流程（`invoke`方法），可以为公司旗下**任何明星**（任何实现了接口的对象）提供经纪服务。
+
+**核心概念:**
+
+![image-20251011113911361](img/image-20251011113911361.png)
+
+### 8.2 AOP进阶
+
+#### 8.2.1 通知
+
+- **通知类型**
+
+![image-20251011114951257](img/image-20251011114951257.png)
+
+![image-20251011120807968](img/image-20251011120807968.png)
+
+- **通知顺序**
+
+  
+
+![image-20251011145115436](img/image-20251011145115436.png)
+
+#### 8.2.2 切入点表达式
+
+![image-20251011150355556](img/image-20251011150355556.png)
+
+![image-20251011150511831](img/image-20251011150511831.png)
+
+![image-20251011152837623](img/image-20251011152837623.png)
+
+![image-20251011153002485](img/image-20251011153002485.png)
+
+![image-20251011153227625](img/image-20251011153227625.png)
+
+自己写个注解用于标识就行
+
+#### 8.2.3 连接点
+
+![image-20251011155048591](img/image-20251011155048591.png)
+
+### 8.3 AOP案例(记录日志)
+
+![image-20251011160243770](img/image-20251011160243770.png)
+
+- **anno 自定义注解**
+
+```java
+//仅起到标识作用
+@Retention(RetentionPolicy.RUNTIME) //在运行时候启动
+@Target(ElementType.METHOD)//当前注解能作用在哪里
+public @interface Log {}
+```
+
+- **LogAspect**
+
+```java
+@Component
+@Slf4j
+@Aspect //切面类
+public class LogAspect {
+
+    @Autowired
+    private HttpServletRequest request; //拿到请求
+
+    @Autowired
+    private OperateLogMapper operateLogMapper;
+
+    @Around("@annotation(com.gxt.anno.Log)")
+    public Object recordLog(ProceedingJoinPoint joinPoint) throws Throwable {
+        //操作人ID - 当前登录员工ID -> 获取请求头的JWT令牌,解析令牌
+        String jwt = request.getHeader("token");
+        Claims claims = JwtUtils.parseJWT(jwt);
+        log.info("{}",claims);
+        Integer OperateUserId = (Integer) claims.get("id");
+
+        //当前时间
+        LocalDateTime now = LocalDateTime.now();
+
+        //操作类名
+        String className = joinPoint.getTarget().getClass().getName();
+
+        //操作方法名
+        String methodName = joinPoint.getSignature().getName();
+
+        //操作方法参数
+        Object[] args = joinPoint.getArgs();
+        String methodParams = Arrays.toString(args);
+
+        //方法返回值
+        //调用原始目标方法运行
+        long begin = System.currentTimeMillis();
+        Object result = joinPoint.proceed(args);
+        long end = System.currentTimeMillis();
+        String resultValue = JSONObject.toJSONString(result);
+
+        //操作耗时
+        long costTime = end - begin;
+
+        //记录操作日志
+        OperateLog operateLog = new OperateLog(
+                null,
+                OperateUserId,
+                now,
+                className,
+                methodName,
+                methodParams,
+                resultValue,
+                costTime);
+        operateLogMapper.insert(operateLog);
+
+        log.info("日志: {}",operateLog);
+        return result;
+    }
+}
+```
+
+## 9.SpringBoot原理
+
+### 9.1 配置优先级
+
+![image-20251011203132831](img/image-20251011203132831.png)
+
+![image-20251011203626734](img/image-20251011203626734.png)
+
+![image-20251011204047208](img/image-20251011204047208.png)
+
+### 9.2 Bean管理
+
+#### 9.2.1 Bean的获取
+
+![image-20251011204333486](img/image-20251011204333486.png)
+
+![image-20251011205544667](img/image-20251011205544667.png)![image-20251011205724894](img/image-20251011205724894.png)
+
+#### 9.2.2 Bean的作用域
+
+**Spring boot 项目中的Bean默认是单例的**
+
+![image-20251011210241360](img/image-20251011210241360.png)
+
+延迟初始化注解@LAZY
+
+![image-20251012000239555](img/image-20251012000239555.png)
+
+#### 9.2.3 第三方Bean
+
+![image-20251012000800424](img/image-20251012000800424.png)
+
+![image-20251012001246294](img/image-20251012001246294.png)
+
+![image-20251012001337799](img/image-20251012001337799.png)
+
+### 9.3 springboot 原理
+
+#### 9.3.1 起步依赖
+
+![image-20251012104304154](img/image-20251012104304154.png)
+
+#### 9.3.2 自动配置
+
+![image-20251012105939876](img/image-20251012105939876.png)
+
+- **获取第三方工具类下的Bean的方案:**
+
+![image-20251012115416017](img/image-20251012115416017.png)
+
+因为默认Springboot项目只扫描当前包
+
+![image-20251012120152577](img/image-20251012120152577.png)
+
+ImportSelect:
+
+![image-20251012115945798](img/image-20251012115945798.png)
+
+加载多种类
+
+一般不用自己写,第三方会自己写好,大概是@Enablexxxx名字
+
+------
+
+**原理:**
+
+![image-20251012122052998](img/image-20251012122052998.png)
+
+![image-20251012122557233](img/image-20251012122557233.png)
+
+@Conditonal注解:
+
+![image-20251012141215650](img/image-20251012141215650.png)
+
+![image-20251012142636686](img/image-20251012142636686.png)
+
+#### 9.3.4 自定义starter
+
+![image-20251012150427641](img/image-20251012150427641.png)
+
+![image-20251012150723836](img/image-20251012150723836.png)
+
+![image-20251012152946746](img/image-20251012152946746.png)
+
+## 10.web后端总结
+
+![image-20251012153157607](img/image-20251012153157607.png)
+
+## 11.Maven 高级
+
+### 11.1 分模块设计与开发
+
+![image-20251012153845788](img/image-20251012153845788.png)
+
+![image-20251012154209204](img/image-20251012154209204.png)
+
+### 11.2 继承与聚合
+
+#### 11.2.1 继承
+
+![image-20251012165425063](img/image-20251012165425063.png)
+
+![image-20251012172937123](img/image-20251012172937123.png)
+
+![image-20251012171441574](img/image-20251012171441574.png)
+
+![image-20251012172708548](img/image-20251012172708548.png)
+
+![image-20251012172739962](img/image-20251012172739962.png)
+
+![image-20251012172855885](img/image-20251012172855885.png)
+
+------
+
+**版本锁定**
+
+![image-20251012173833666](img/image-20251012173833666.png)
+
+![image-20251012173932144](img/image-20251012173932144.png)
+
+![image-20251012190937461](img/image-20251012190937461.png)
+
+![image-20251012191007266](img/image-20251012191007266.png)
+
+#### 11.2.2 聚合
+
+![image-20251012191854291](img/image-20251012191854291.png)
+
+![image-20251012192124034](img/image-20251012192124034.png)
+
+![image-20251012192340231](img/image-20251012192340231.png)
+
+### 11.3 私服
+
+![image-20251012193554446](img/image-20251012193554446.png)
+
+![image-20251012194906730](img/image-20251012194906730.png)
+
+**central是中央仓库拿过来的依赖**
+
+![image-20251012195018021](img/image-20251012195018021.png)
+
+![image-20251012195037647](img/image-20251012195037647.png)
+
+![image-20251012195047460](img/image-20251012195047460.png)
+
+![image-20251012195238577](img/image-20251012195238577.png)
+
+![image-20251012195716278](img/image-20251012195716278.png)
